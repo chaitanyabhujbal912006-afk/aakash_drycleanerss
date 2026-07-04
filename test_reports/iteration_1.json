@@ -1,0 +1,43 @@
+{
+  "summary": "First iteration for WashFlow ERP. Ran 35 pytest backend tests + Playwright UI smoke on Login/Admin/Client/Delivery flows. Fixed 1 backend bug (ObjectId leaking into embedded order docs from driver_count and shop_receipt). All 35 backend tests pass and every key user flow verified end-to-end via the public URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/ai/chat", "issue": "Occasionally returns [assistant error: Budget has been exceeded] from LiteLLM/Emergent LLM key. Transient during first run; retry succeeded. Passed on final run but keep an eye on quota."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Dashboard", "issues": ["Recharts logs 'width(-1) height(-1)' warning during initial render because the ResponsiveContainer's parent has 0-height before stats load. Cosmetic only – chart renders once data arrives. Consider a min-height on `.h-64` container or explicit width/height on ResponsiveContainer."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking. Consider silencing Recharts min-height warning by giving the chart container a defined size before data arrives.",
+    "Monitor Emergent LLM budget for /api/ai/chat — one call surfaced a transient budget_exceeded error before succeeding."
+  ],
+  "critical_code_review_comments": [
+    "server.py driver_count / shop_receipt were embedding the raw insert_one() result (which motor mutates to include _id: ObjectId) inside the order doc, so any later GET/PATCH on that order raised 500 due to ObjectId serialization. Fixed by popping _id from log_doc before the update_one embed. Cleaned residual bad data in the DB with a targeted $unset.",
+    "server.py update_status allows role 'delivery' to change status to ANY value (including cancelled/washing/ironing). Product spec says only admin advances washing→ironing→ready. Consider restricting non-admins to a whitelist (picked_up, out_for_delivery) or requiring admin role.",
+    "server.py /api/orders/{id}/verify-pickup-otp path stores pickup_otp_hash but never expires it. Consider adding TTL / expiry check for real deployments (mocked scenario acceptable).",
+    "server.py request_role uses require_role() but doesn't 401 vs 403 correctly when token is invalid AND role wrong – acceptable for MVP.",
+    "Frontend /pages/admin/Dashboard.jsx: kpi containers show em-dash while stats load (fine), but /api/dashboard/stats is fetched even during initial render before token bootstrap on hard refresh; consider gating fetch on user!=null.",
+    "Frontend lib/api.js response interceptor silently swallows 401s (comment says 'let AuthContext handle redirect' but no redirect is wired). If a token expires mid-session the user is stuck on a blank page. Consider redirecting to /login on 401."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (fixed ObjectId in driver_count + shop_receipt embeds)",
+    "/app/backend/tests/backend_test.py (new test suite)"
+  ],
+  "success_rate": {"backend": "100% (35/35 pytest)", "frontend": "100% of key flows (login admin/driver/client, dashboard, orders, order detail sheet, place order, pickup entry with OTP step)"},
+  "test_credentials": "admin@aakash.in/admin123, driver@aakash.in/driver123, priya@example.com/priya123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Called POST /api/seed once at test start. Created 1 client order WF-1004 during frontend flow test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend suite is in /app/backend/tests/backend_test.py – run with `REACT_APP_BACKEND_URL=<public-url> pytest /app/backend/tests/backend_test.py -n 0`. Tests are stateful within a class (they share module-level STATE dict) so keep them ordered. Backend ObjectId bug fix in server.py at driver_count and shop_receipt was necessary for order lifecycle GETs to succeed after those checkpoints. AI chat may occasionally hit LiteLLM budget_exceeded – retry logic in the endpoint returns the error in the stream text, so tests should check for that string.",
+  "rca of the issue": "driver_count() and shop_receipt() built a log_doc, inserted it into verification_logs (which mutates the dict by adding _id=ObjectId), then embedded the SAME mutated dict into the orders collection via $set. Subsequent GET /api/orders/{id} projected {_id: 0} at top level only, leaving the nested ObjectId inside driver_count._id and shop_receipt._id. FastAPI/starlette failed to json-encode the response with `TypeError: 'ObjectId' object is not iterable`. Fix: pop _id from log_doc before $set-embedding. Mitigated existing data with `db.orders.update_many({}, {$unset: {'driver_count._id': '', 'shop_receipt._id': ''}})`."
+}
