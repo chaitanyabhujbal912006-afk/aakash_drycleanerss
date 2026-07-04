@@ -1,0 +1,92 @@
+{
+  "theme": {
+    "mode": "light",
+    "archetype": "Organic & Earthy (Archetype 1) + Swiss High-Contrast density",
+    "description": "Premium, trustworthy, and organic yet highly functional. Using the brand's Deep Teal-Green to evoke cleanliness and eco-friendliness, while the Warm Off-White provides a soft, unclinical background. The aesthetic borrows from Apple's modern UI with purposeful data density."
+  },
+  "colors": {
+    "primary": "#0C5E48",
+    "primary_foreground": "#FFFFFF",
+    "background": "#F4F3EF",
+    "surface": "#FFFFFF",
+    "border": "#E2E0D8",
+    "text_primary": "#06291F",
+    "text_secondary": "#4A6159",
+    "status": {
+      "pending": "#F59E0B",
+      "assigned": "#3B82F6",
+      "picked_up": "#8B5CF6",
+      "at_shop": "#6366F1",
+      "washing": "#0EA5E9",
+      "ironing": "#14B8A6",
+      "ready": "#10B981",
+      "out_for_delivery": "#F97316",
+      "delivered": "#0C5E48"
+    }
+  },
+  "typography": {
+    "admin_heading": "Geist, sans-serif",
+    "admin_body": "Geist, sans-serif",
+    "mobile_heading": "Cabinet Grotesk, sans-serif",
+    "mobile_body": "Plus Jakarta Sans, sans-serif",
+    "mono": "Geist Mono, monospace",
+    "rules": [
+      "Use tracking-tight for all headings above 32px.",
+      "Overlines/Labels MUST be Uppercase + Tiny + Wide Spacing (tracking-[0.2em]).",
+      "Line height: leading-none for headers, leading-relaxed for body.",
+      "Never use pure black for text, use the defined text_primary (#06291F)."
+    ]
+  },
+  "layout_and_spacing": {
+    "sidebar": "w-[220px] fixed h-screen border-r border-[#E2E0D8] bg-[#F4F3EF] z-40",
+    "density": "High density, functional beauty. Use the 'Control Room' grid pattern for the Admin Dashboard.",
+    "spacing_scale": "Tailwind scale. Use p-6 or p-8 for containers with borders.",
+    "grid_admin": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with gap-4 or gap-6. Every pixel utilized. h-full on children.",
+    "mobile_layout": "Responsive mobile-first grids. Use generous padding (p-6) for client app. Max image height 80vh."
+  },
+  "components": {
+    "badges": "Status badges MUST include a glowing colored indicator dot. e.g., <span class='w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]'></span>",
+    "cards": "Cardless or dense styles for admin. Use surface (#FFFFFF) with 1px border (#E2E0D8). Subtle shadow only on hover. Max border radius 8px.",
+    "tables": "Virtualized tables for high density data. Stick to 10-15 rows default view with explicit filters. Use slide-over detail panels instead of expanding rows.",
+    "inputs": "Shadcn components heavily customized to match the brand. Use #0C5E48 for focus rings."
+  },
+  "motion": {
+    "hover": "Explicit text color on hover. Slight lift (-translate-y-1) for dashboard cards.",
+    "transitions": "transition: transform 0.2s ease, opacity 0.2s ease.",
+    "mobile": "Smooth micro-interactions for OTP entry and order stage animations."
+  },
+  "media": {
+    "icons": "lucide-react for standard elements. Use @phosphor-icons/react if more dense line-icons are needed.",
+    "images": [
+      {
+        "category": "Mobile Client App - Services Showcase",
+        "url": "https://images.unsplash.com/photo-1491336477066-31156b5e4f35?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwyfHxwcmVtaXVtJTIwc3VpdCUyMGRyeSUyMGNsZWFuaW5nfGVufDB8fHx8MTc4MzE4NjEyNXww&ixlib=rb-4.1.0&q=85",
+        "description": "Premium suit dry cleaning visualization"
+      },
+      {
+        "category": "Mobile Client App - Delivery Quality",
+        "url": "https://images.unsplash.com/photo-1635274605638-d44babc08a4f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwyfHxjbGVhbiUyMGZvbGRlZCUyMGxhdW5kcnl8ZW58MHx8fHwxNzgzMTg2MTI1fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Perfectly folded crisp laundry"
+      },
+      {
+        "category": "Delivery App / Order Tracking",
+        "url": "https://images.pexels.com/photos/12725403/pexels-photo-12725403.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Smiling delivery person in green jacket"
+      }
+    ],
+    "logo": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 60' fill='none'><path d='M20 40C20 40 25 20 40 20C55 20 60 40 60 40C60 40 65 30 75 30C85 30 90 40 90 40' stroke='#0C5E48' stroke-width='4' stroke-linecap='round'/><circle cx='40' cy='15' r='4' fill='#0C5E48'/><circle cx='75' cy='22' r='3' fill='#0C5E48'/><text x='110' y='36' font-family='Cabinet Grotesk, sans-serif' font-weight='800' font-size='22' fill='#0C5E48'>AAKASH</text><text x='110' y='50' font-family='Geist, sans-serif' font-weight='600' font-size='10' fill='#4A6159' letter-spacing='0.2em'>DRYCLEANERS</text></svg>"
+  },
+  "testing": {
+    "attributes": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case, role-based."
+  },
+  "instructions_to_main_agent": [
+    "Build WashFlow: an enterprise laundry ERP with 3 roles: Admin (Web), Client (Mobile Web), Delivery (Mobile Web).",
+    "Enforce strict 220px fixed sidebar for Admin. Use the brand color #0C5E48 as primary.",
+    "Use Geist for Admin and Cabinet Grotesk + Plus Jakarta Sans for Mobile Apps.",
+    "Apply purposeful density for Admin: No generic empty card grids. Use 'Control Room' grid structure, dense tables, compact indicators.",
+    "Status indicators must use glowing dots using box-shadow.",
+    "All interactive elements MUST have data-testid attributes for testing.",
+    "Include the provided SVG logo in the header.",
+    "Use Apple-style modern UI: crisp borders (#E2E0D8), surface (#FFFFFF) and background (#F4F3EF), soft radii (max 8px), high contrast text."
+  ]
+}
