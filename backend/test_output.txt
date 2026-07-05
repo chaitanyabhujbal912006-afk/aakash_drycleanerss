@@ -1,0 +1,43 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.9, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\Chaitanya Bhujbal\AppData\Local\Programs\Python\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: C:\projects\laundry\aakash_drycleanerss\backend
+configfile: pytest.ini
+plugins: anyio-4.13.0, langsmith-0.7.25, xdist-3.8.0
+collecting ... collected 35 items / 2 deselected / 33 selected
+
+tests/backend_test.py::TestHealth::test_root PASSED                      [  3%]
+tests/backend_test.py::TestSeed::test_seed_idempotent PASSED             [  6%]
+tests/backend_test.py::TestAuth::test_login_admin PASSED                 [  9%]
+tests/backend_test.py::TestAuth::test_login_bad_password PASSED          [ 12%]
+tests/backend_test.py::TestAuth::test_me_requires_token PASSED           [ 15%]
+tests/backend_test.py::TestAuth::test_me_returns_user PASSED             [ 18%]
+tests/backend_test.py::TestAuth::test_register_new_client PASSED         [ 21%]
+tests/backend_test.py::TestAuth::test_register_duplicate PASSED          [ 24%]
+tests/backend_test.py::TestServices::test_list_services PASSED           [ 27%]
+tests/backend_test.py::TestServices::test_admin_can_patch_service PASSED [ 30%]
+tests/backend_test.py::TestServices::test_client_cannot_patch_service PASSED [ 33%]
+tests/backend_test.py::TestOrderLifecycle::test_client_create_order PASSED [ 36%]
+tests/backend_test.py::TestOrderLifecycle::test_client_sees_own_orders PASSED [ 39%]
+tests/backend_test.py::TestOrderLifecycle::test_driver_does_not_see_unassigned PASSED [ 42%]
+tests/backend_test.py::TestOrderLifecycle::test_admin_sees_all PASSED    [ 45%]
+tests/backend_test.py::TestOrderLifecycle::test_admin_assign_driver PASSED [ 48%]
+tests/backend_test.py::TestOrderLifecycle::test_pickup_otp_flow PASSED   [ 51%]
+tests/backend_test.py::TestOrderLifecycle::test_driver_count_log PASSED  [ 54%]
+tests/backend_test.py::TestOrderLifecycle::test_shop_receipt_match PASSED [ 57%]
+tests/backend_test.py::TestOrderLifecycle::test_status_transitions PASSED [ 60%]
+tests/backend_test.py::TestOrderLifecycle::test_delivery_otp_flow PASSED [ 63%]
+tests/backend_test.py::TestInvoicesPayments::test_generate_invoice PASSED [ 66%]
+tests/backend_test.py::TestInvoicesPayments::test_generate_invoice_idempotent PASSED [ 69%]
+tests/backend_test.py::TestInvoicesPayments::test_client_lists_own_invoices PASSED [ 72%]
+tests/backend_test.py::TestInvoicesPayments::test_invoice_pdf PASSED     [ 75%]
+tests/backend_test.py::TestInvoicesPayments::test_invoice_pdf_no_token PASSED [ 78%]
+tests/backend_test.py::TestInvoicesPayments::test_payment_create_and_verify PASSED [ 81%]
+tests/backend_test.py::TestComplaints::test_client_create_complaint PASSED [ 84%]
+tests/backend_test.py::TestComplaints::test_client_lists_own_complaints PASSED [ 87%]
+tests/backend_test.py::TestComplaints::test_admin_sees_all_complaints PASSED [ 90%]
+tests/backend_test.py::TestNotifications::test_client_has_notifications PASSED [ 93%]
+tests/backend_test.py::TestDashboard::test_stats_admin PASSED            [ 96%]
+tests/backend_test.py::TestDashboard::test_stats_forbidden_for_client PASSED [100%]
+
+====================== 33 passed, 2 deselected in 7.65s =======================

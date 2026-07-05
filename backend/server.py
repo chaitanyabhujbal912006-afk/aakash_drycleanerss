@@ -6,6 +6,8 @@ powered by Claude Sonnet via emergentintegrations.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import io
 import logging
 import os
@@ -39,6 +41,15 @@ DB_NAME = os.environ["DB_NAME"]
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_EXPIRES_MINUTES = int(os.environ.get("JWT_EXPIRES_MINUTES", "1440"))
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+
+# MSG91 SMS OTP (optional — set to enable real SMS)
+MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "")
+MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID", "")
+
+# Razorpay (optional — set to enable real payments)
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_MOCK")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+
 BUSINESS = {
     "name": os.environ.get("BUSINESS_NAME", "Aakash Drycleaners"),
     "address": os.environ.get("BUSINESS_ADDRESS", ""),
@@ -145,6 +156,9 @@ ROLES = {"admin", "delivery", "client"}
 STATUSES = ["pending", "assigned", "picked_up", "at_shop", "washing",
             "ironing", "ready", "out_for_delivery", "delivered", "cancelled"]
 
+# Statuses that delivery agents are allowed to set (security fix)
+DELIVERY_ALLOWED_STATUSES = {"picked_up", "out_for_delivery", "delivered"}
+
 
 class RegisterIn(BaseModel):
     email: EmailStr
@@ -220,6 +234,24 @@ class ComplaintIn(BaseModel):
 class ChatIn(BaseModel):
     session_id: str
     message: str
+
+
+class GpsPingIn(BaseModel):
+    lat: float
+    lng: float
+    order_id: Optional[str] = None
+
+
+class PhotoUploadIn(BaseModel):
+    order_id: str
+    checkpoint: str  # driver_count | shop_receipt
+    data_url: str   # base64 data URL from browser camera
+
+
+class RazorpayVerifyIn(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 
 # ---------------------------------------------------------------------------
@@ -415,20 +447,17 @@ async def assign_order(order_id: str, body: AssignIn, admin: dict = Depends(requ
 
 
 @api.patch("/orders/{order_id}/status")
-async def update_status(order_id: str, body: StatusIn, user: dict = Depends(current_user)):
+async def update_status(order_id: str, body: StatusIn, admin: dict = Depends(require_role("admin"))):
     if body.status not in STATUSES:
         raise HTTPException(400, "Invalid status")
-    if user["role"] not in ("admin", "delivery"):
-        raise HTTPException(403, "Not allowed")
     order = await db.orders.find_one_and_update(
         {"id": order_id},
         {"$set": {"status": body.status, "updated_at": now_iso()},
-         "$push": {"history": {"status": body.status, "at": now_iso(), "by": user["id"]}}},
+         "$push": {"history": {"status": body.status, "at": now_iso(), "by": admin["id"]}}},
         return_document=True,
     )
     if not order:
         raise HTTPException(404, "Order not found")
-    # push notification to client
     await _notify(order["client_id"], f"Order {order['number']} → {body.status.replace('_',' ')}", order["id"])
     return strip_id(order)
 
@@ -472,9 +501,9 @@ async def send_pickup_otp(order_id: str, user: dict = Depends(current_user)):
         {"id": order_id},
         {"$set": {"pickup_otp_hash": hash_password(otp), "pickup_otp_generated_at": now_iso()}},
     )
-    # Mocked SMS — for demo we return OTP so client UI can display it.
-    log.info(f"[MOCK SMS] pickup OTP for {order['number']} → {otp}")
-    return {"otp": otp, "message": "OTP generated (mock SMS). Share with delivery agent."}
+    sms_sent = await _send_sms(user.get("phone", ""), otp, order["number"])
+    log.info(f"[SMS {'sent' if sms_sent else 'mock'}] pickup OTP for {order['number']} → {otp}")
+    return {"otp": otp, "sms_sent": sms_sent, "message": "OTP generated. Share with delivery agent."}
 
 
 @api.post("/orders/{order_id}/verify-pickup-otp")
@@ -547,9 +576,13 @@ async def send_delivery_otp(order_id: str, admin: dict = Depends(require_role("a
                   "updated_at": now_iso()},
          "$push": {"history": {"status": "out_for_delivery", "at": now_iso(), "by": admin["id"]}}},
     )
-    log.info(f"[MOCK SMS] delivery OTP for {order['number']} → {otp}")
+    # Get client phone for SMS
+    client_doc = await db.users.find_one({"id": order["client_id"]})
+    client_phone = client_doc.get("phone", "") if client_doc else ""
+    sms_sent = await _send_sms(client_phone, otp, order["number"])
+    log.info(f"[SMS {'sent' if sms_sent else 'mock'}] delivery OTP for {order['number']} → {otp}")
     await _notify(order["client_id"], f"Delivery OTP for {order['number']}: {otp}", order_id)
-    return {"otp": otp, "message": "Delivery OTP sent (mock SMS)."}
+    return {"otp": otp, "sms_sent": sms_sent, "message": "Delivery OTP sent."}
 
 
 @api.post("/orders/{order_id}/verify-delivery-otp")
@@ -673,29 +706,69 @@ async def payments_create(invoice_id: str, user: dict = Depends(current_user)):
         raise HTTPException(404, "Invoice not found")
     if user["role"] == "client" and inv["client_id"] != user["id"]:
         raise HTTPException(403, "Not your invoice")
-    # MOCK — normally Razorpay create-order call
-    rp_order_id = f"order_MOCK{uuid.uuid4().hex[:12]}"
+
+    if RAZORPAY_KEY_SECRET:
+        # Real Razorpay integration
+        import razorpay
+        client_rp = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        rp_order = client_rp.order.create({"amount": inv["total_paise"], "currency": "INR", "receipt": inv["number"]})
+        rp_order_id = rp_order["id"]
+    else:
+        # Mock fallback
+        rp_order_id = f"order_MOCK{uuid.uuid4().hex[:12]}"
+
     await db.invoices.update_one({"id": invoice_id}, {"$set": {"rp_order_id": rp_order_id}})
     return {
         "rp_order_id": rp_order_id,
         "amount": inv["total_paise"],
         "currency": "INR",
-        "key_id": "rzp_test_MOCK",
+        "key_id": RAZORPAY_KEY_ID,
     }
 
 
 @api.post("/payments/verify/{invoice_id}")
-async def payments_verify(invoice_id: str, user: dict = Depends(current_user)):
-    """Mock verify — accepts any signature."""
+async def payments_verify(invoice_id: str, body: RazorpayVerifyIn, user: dict = Depends(current_user)):
+    """Verify Razorpay signature (real) or accept mock."""
+    if RAZORPAY_KEY_SECRET:
+        # HMAC-SHA256 verification per Razorpay docs
+        expected = hmac.new(
+            RAZORPAY_KEY_SECRET.encode(),
+            f"{body.razorpay_order_id}|{body.razorpay_payment_id}".encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected, body.razorpay_signature):
+            raise HTTPException(400, "Invalid payment signature")
     inv = await db.invoices.find_one_and_update(
         {"id": invoice_id},
-        {"$set": {"status": "paid", "paid_at": now_iso()}},
+        {"$set": {"status": "paid", "paid_at": now_iso(),
+                  "razorpay_payment_id": body.razorpay_payment_id}},
         return_document=True,
     )
     if not inv:
         raise HTTPException(404, "Invoice not found")
     await db.orders.update_one({"id": inv["order_id"]}, {"$set": {"paid": True}})
     return {"ok": True, "status": "paid"}
+
+
+@api.post("/payments/webhook")
+async def razorpay_webhook(request: Request):
+    """Razorpay webhook for server-side payment confirmation."""
+    if not RAZORPAY_KEY_SECRET:
+        return {"ok": True}  # no-op in mock mode
+    body_bytes = await request.body()
+    sig = request.headers.get("x-razorpay-signature", "")
+    expected = hmac.new(RAZORPAY_KEY_SECRET.encode(), body_bytes, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        raise HTTPException(400, "Invalid webhook signature")
+    import json
+    payload = json.loads(body_bytes)
+    if payload.get("event") == "payment.captured":
+        payment = payload["payload"]["payment"]["entity"]
+        await db.invoices.update_one(
+            {"rp_order_id": payment["order_id"]},
+            {"$set": {"status": "paid", "paid_at": now_iso(), "razorpay_payment_id": payment["id"]}},
+        )
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -738,6 +811,28 @@ async def _notify(user_id: str, message: str, ref: Optional[str] = None):
         "read": False,
         "at": now_iso(),
     })
+
+
+async def _send_sms(phone: str, otp: str, order_number: str) -> bool:
+    """Send OTP via MSG91 if configured, otherwise log mock."""
+    if not MSG91_AUTH_KEY or not MSG91_TEMPLATE_ID or not phone:
+        log.info(f"[MOCK SMS] OTP {otp} for {order_number} → {phone}")
+        return False
+    try:
+        import httpx
+        async with httpx.AsyncClient() as hxc:
+            resp = await hxc.post(
+                "https://control.msg91.com/api/v5/otp",
+                params={"template_id": MSG91_TEMPLATE_ID, "mobile": phone, "authkey": MSG91_AUTH_KEY,
+                        "otp": otp, "invisible": "1"},
+                timeout=10,
+            )
+        resp.raise_for_status()
+        log.info(f"[SMS] OTP sent for {order_number} → {phone}")
+        return True
+    except Exception as e:
+        log.warning(f"[SMS] Failed to send OTP: {e}")
+        return False
 
 
 @api.get("/notifications")
@@ -879,6 +974,55 @@ async def ai_history(session_id: str, user: dict = Depends(current_user)):
         {"session_id": session_id, "user_id": user["id"]}, {"_id": 0}
     ).sort("at", 1).to_list(500)
     return msgs
+
+
+# ---------------------------------------------------------------------------
+# GPS tracking
+# ---------------------------------------------------------------------------
+@api.post("/gps/ping")
+async def gps_ping(body: GpsPingIn, user: dict = Depends(require_role("delivery"))):
+    """Delivery agent pings their location. Stored per-driver for live map."""
+    doc = {
+        "driver_id": user["id"],
+        "driver_name": user["name"],
+        "lat": body.lat,
+        "lng": body.lng,
+        "order_id": body.order_id,
+        "at": now_iso(),
+    }
+    await db.gps_pings.replace_one({"driver_id": user["id"]}, doc, upsert=True)
+    return {"ok": True}
+
+
+@api.get("/gps/drivers")
+async def gps_drivers(admin: dict = Depends(require_role("admin"))):
+    """Latest ping per active driver (admin only)."""
+    pings = await db.gps_pings.find({}, {"_id": 0}).to_list(100)
+    return pings
+
+
+# ---------------------------------------------------------------------------
+# Photo upload (camera capture → stored as base64 in DB)
+# ---------------------------------------------------------------------------
+@api.post("/photos/upload")
+async def upload_photo(body: PhotoUploadIn, user: dict = Depends(require_role("delivery", "admin"))):
+    doc = {
+        "id": gen_id(),
+        "order_id": body.order_id,
+        "checkpoint": body.checkpoint,
+        "uploaded_by": user["id"],
+        "data_url": body.data_url,
+        "at": now_iso(),
+    }
+    await db.photos.insert_one(doc)
+    doc.pop("_id", None)
+    return {"photo_id": doc["id"], "at": doc["at"]}
+
+
+@api.get("/photos/{order_id}")
+async def get_photos(order_id: str, user: dict = Depends(current_user)):
+    photos = await db.photos.find({"order_id": order_id}, {"_id": 0, "data_url": 0}).to_list(50)
+    return photos
 
 
 # ---------------------------------------------------------------------------

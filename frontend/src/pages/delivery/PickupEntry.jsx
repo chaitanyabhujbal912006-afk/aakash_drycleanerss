@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft, Sparkles, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Camera, ShieldCheck, X, CheckCircle2 } from "lucide-react";
 
 const CATEGORIES = ["Gents", "Ladies", "Kids", "Household"];
 
@@ -19,9 +19,90 @@ export default function PickupEntry() {
   const [step, setStep] = useState("count"); // count → otp
   const [otp, setOtp] = useState("");
   const [busy, setBusy] = useState(false);
-  const [aiSuggesting, setAiSuggesting] = useState(false);
 
-  useEffect(() => { api.get(`/orders/${id}`).then(({ data }) => setOrder(data)); }, [id]);
+  // Camera state
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoUploaded, setPhotoUploaded] = useState(false);
+  const streamRef = useRef(null);
+
+  useEffect(() => {
+    api.get(`/orders/${id}`).then(({ data }) => setOrder(data));
+    // Start GPS pinging every 30s
+    const gpsInterval = setInterval(pingGps, 30000);
+    pingGps();
+    return () => {
+      clearInterval(gpsInterval);
+      stopCamera();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const pingGps = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        api.post("/gps/ping", { lat: coords.latitude, lng: coords.longitude, order_id: id })
+          .catch(() => {}); // silent fail
+      },
+      () => {} // silent fail if denied
+    );
+  };
+
+  const startCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }, // rear camera on mobile
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setShowCamera(true);
+    } catch {
+      toast.error("Camera not available. Please allow camera access.");
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setShowCamera(false);
+  }, []);
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    setCapturedPhoto(dataUrl);
+    stopCamera();
+  };
+
+  const uploadPhoto = async () => {
+    if (!capturedPhoto) return;
+    setPhotoUploading(true);
+    try {
+      await api.post("/photos/upload", {
+        order_id: id,
+        checkpoint: "driver_count",
+        data_url: capturedPhoto,
+      });
+      setPhotoUploaded(true);
+      toast.success("Photo uploaded successfully.");
+    } catch {
+      toast.error("Photo upload failed — continuing without it.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   if (!order) return <div className="text-muted2 text-sm">Loading…</div>;
 
@@ -49,25 +130,13 @@ export default function PickupEntry() {
     finally { setBusy(false); }
   };
 
-  // "AI vision" — mock estimate that pre-fills based on expected quantities.
-  const aiEstimate = async () => {
-    setAiSuggesting(true);
-    setTimeout(() => {
-      const byCat = {};
-      order.items.forEach((i) => {
-        byCat[i.category] = (byCat[i.category] || 0) + i.quantity;
-      });
-      setCounts(byCat);
-      setAiSuggesting(false);
-      toast.success("AI estimated counts from camera preview.");
-    }, 900);
-  };
-
   const expected = order.items.reduce((s, i) => s + i.quantity, 0);
   const totalEntered = Object.values(counts).reduce((s, n) => s + (Number(n) || 0), 0);
 
   return (
     <div className="space-y-5" data-testid="delivery-pickup">
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+
       <button onClick={() => nav(-1)} className="text-muted2 flex items-center gap-1 text-sm hover:text-ink">
         <ArrowLeft className="w-4 h-4" /> back
       </button>
@@ -80,13 +149,73 @@ export default function PickupEntry() {
 
       {step === "count" && (
         <>
-          <button onClick={aiEstimate} disabled={aiSuggesting}
-                  data-testid="ai-count-button"
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-brand text-brand text-sm font-medium hover:bg-brand-50">
-            <Sparkles className="w-4 h-4" />
-            {aiSuggesting ? "Analysing photo…" : "AI estimate from photo"}
-          </button>
+          {/* Camera Section */}
+          <div className="wf-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">📸 Photo Evidence</Label>
+              {photoUploaded && (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Uploaded
+                </span>
+              )}
+            </div>
 
+            {showCamera && (
+              <div className="relative rounded-lg overflow-hidden bg-black">
+                <video ref={videoRef} autoPlay playsInline className="w-full max-h-64 object-cover" />
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
+                  <button
+                    onClick={capturePhoto}
+                    className="bg-white text-black rounded-full px-5 py-2 text-sm font-bold shadow-lg"
+                  >
+                    Capture
+                  </button>
+                  <button
+                    onClick={stopCamera}
+                    className="bg-black/60 text-white rounded-full p-2"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {capturedPhoto && !showCamera && (
+              <div className="relative rounded-lg overflow-hidden">
+                <img src={capturedPhoto} alt="captured" className="w-full max-h-48 object-cover rounded-lg" />
+                <button
+                  onClick={() => { setCapturedPhoto(null); setPhotoUploaded(false); }}
+                  className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {!showCamera && !capturedPhoto && (
+                <button
+                  onClick={startCamera}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-brand text-brand text-sm font-medium hover:bg-brand-50"
+                >
+                  <Camera className="w-4 h-4" />
+                  Open Camera
+                </button>
+              )}
+              {capturedPhoto && !photoUploaded && (
+                <Button
+                  onClick={uploadPhoto}
+                  disabled={photoUploading}
+                  size="sm"
+                  className="flex-1 bg-brand hover:bg-brand-600 text-white"
+                >
+                  {photoUploading ? "Uploading…" : "Upload Photo"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Count Section */}
           <div className="space-y-3">
             {CATEGORIES.map((c) => (
               <div key={c} className="wf-card p-4">

@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import CommandPalette from "@/components/CommandPalette";
 import {
   LayoutDashboard, Package, Truck, Users, Receipt, BarChart3, Settings,
-  Search, LogOut, Bell,
+  Search, LogOut, Bell, Map,
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -13,6 +13,7 @@ const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/orders", label: "Orders", icon: Package },
   { to: "/admin/delivery", label: "Delivery", icon: Truck },
+  { to: "/admin/map", label: "Live Map", icon: Map },
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/invoices", label: "Invoices", icon: Receipt },
   { to: "/admin/reports", label: "Reports", icon: BarChart3 },
