@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Landing from "@/pages/Landing";
+import NotFound from "@/pages/NotFound";
 
 import AdminLayout from "@/layouts/AdminLayout";
 import AdminDashboard from "@/pages/admin/Dashboard";
@@ -83,7 +84,7 @@ export default function App() {
             <Route path="/delivery/deliver/:id" element={<DeliveryDeliver />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
