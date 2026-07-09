@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import CommandPalette from "@/components/CommandPalette";
 import {
   LayoutDashboard, Package, Truck, Users, Receipt, BarChart3, Settings,
-  Search, LogOut, Bell, Map,
+  Search, LogOut, Bell, Map, MessageSquare,
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -17,6 +17,7 @@ const nav = [
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/invoices", label: "Invoices", icon: Receipt },
   { to: "/admin/reports", label: "Reports", icon: BarChart3 },
+  { to: "/admin/complaints", label: "Complaints", icon: MessageSquare },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

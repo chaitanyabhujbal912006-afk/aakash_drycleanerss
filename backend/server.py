@@ -231,6 +231,10 @@ class ComplaintIn(BaseModel):
     message: str
 
 
+class ComplaintUpdateIn(BaseModel):
+    status: str  # open | in_review | resolved | closed
+
+
 class ChatIn(BaseModel):
     session_id: str
     message: str
@@ -797,6 +801,23 @@ async def list_complaints(user: dict = Depends(current_user)):
         q["client_id"] = user["id"]
     docs = await db.complaints.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return docs
+
+
+@api.patch("/complaints/{complaint_id}")
+async def update_complaint(complaint_id: str, body: ComplaintUpdateIn,
+                           admin: dict = Depends(require_role("admin"))):
+    VALID_STATUSES = ("open", "in_review", "resolved", "closed")
+    if body.status not in VALID_STATUSES:
+        raise HTTPException(400, f"Status must be one of: {', '.join(VALID_STATUSES)}")
+    doc = await db.complaints.find_one_and_update(
+        {"id": complaint_id},
+        {"$set": {"status": body.status, "updated_at": now_iso(),
+                  "resolved_by": admin["id"]}},
+        return_document=True,
+    )
+    if not doc:
+        raise HTTPException(404, "Complaint not found")
+    return strip_id(doc)
 
 
 # ---------------------------------------------------------------------------

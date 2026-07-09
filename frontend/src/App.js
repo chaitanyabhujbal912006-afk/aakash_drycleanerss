@@ -16,6 +16,7 @@ import AdminCustomers from "@/pages/admin/Customers";
 import AdminInvoices from "@/pages/admin/Invoices";
 import AdminReports from "@/pages/admin/Reports";
 import AdminSettings from "@/pages/admin/Settings";
+import AdminComplaints from "@/pages/admin/Complaints";
 
 import MobileLayout from "@/layouts/MobileLayout";
 import ClientHome from "@/pages/client/Home";
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/admin/invoices" element={<AdminInvoices />} />
             <Route path="/admin/reports" element={<AdminReports />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/complaints" element={<AdminComplaints />} />
           </Route>
 
           {/* Client mobile web */}
