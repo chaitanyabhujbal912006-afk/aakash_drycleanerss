@@ -13,9 +13,13 @@ export default function ClientInvoices() {
 
   const pay = async (inv) => {
     try {
-      await api.post(`/payments/create-order/${inv.id}`);
-      // MOCKED razorpay — auto-verify for demo
-      await api.post(`/payments/verify/${inv.id}`);
+      const { data: order } = await api.post(`/payments/create-order/${inv.id}`);
+      // MOCKED razorpay — auto-verify for demo (backend skips HMAC in mock mode)
+      await api.post(`/payments/verify/${inv.id}`, {
+        razorpay_order_id: order.rp_order_id,
+        razorpay_payment_id: `pay_MOCK${Date.now()}`,
+        razorpay_signature: "mock_signature",
+      });
       toast.success(`Paid ${rupees(inv.total_paise)} · Thank you!`);
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Payment failed"); }

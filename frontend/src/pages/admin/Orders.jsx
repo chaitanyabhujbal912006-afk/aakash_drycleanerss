@@ -8,7 +8,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { FileText, ShieldCheck } from "lucide-react";
+import { FileText, ShieldCheck, Send } from "lucide-react";
+
 
 const STATUSES = [
   "pending", "assigned", "picked_up", "at_shop", "washing",
@@ -72,6 +73,14 @@ export default function AdminOrders() {
     toast.success("Shop receipt confirmed");
     load(); const r = await api.get(`/orders/${selected.id}`); setSelected(r.data);
     const l = await api.get(`/orders/${selected.id}/verification-logs`); setLogs(l.data);
+  };
+
+  const sendDeliveryOtp = async () => {
+    try {
+      const { data } = await api.post(`/orders/${selected.id}/send-delivery-otp`);
+      toast.success(`Delivery OTP: ${data.otp} — send to customer`);
+      load(); const r = await api.get(`/orders/${selected.id}`); setSelected(r.data);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed to send OTP"); }
   };
 
   return (
@@ -287,6 +296,16 @@ export default function AdminOrders() {
                     <FileText className="w-4 h-4 mr-2" /> Generate invoice
                   </Button>
                 </div>
+                {selected && ["ready", "washing", "ironing"].includes(selected.status) && (
+                  <Button
+                    onClick={sendDeliveryOtp}
+                    data-testid="send-delivery-otp-button"
+                    variant="outline"
+                    className="w-full h-10 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  >
+                    <Send className="w-4 h-4 mr-2" /> Send Delivery OTP to Client
+                  </Button>
+                )}
               </div>
             </>
           )}
